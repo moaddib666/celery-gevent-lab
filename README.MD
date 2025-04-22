@@ -37,7 +37,7 @@ python3 trigger_tasks.py
 
 ```bash
 /Users/moaddib/PycharmProjects/celeryLab/pythonProject/.venv/bin/python -m celery -A tasks worker --loglevel=info --pool=gevent --concurrency=1 
- 
+
  -------------- celery@asmadeus.local v5.5.0rc1 (immunity)
 --- ***** ----- 
 -- ******* ---- macOS-14.6.1-x86_64-i386-64bit 2024-10-15 14:27:22
@@ -51,7 +51,7 @@ python3 trigger_tasks.py
 --- ***** ----- 
  -------------- [queues]
                 .> celery           exchange=celery(direct) key=celery
-                
+
 
 [tasks]
   . tasks.long_task
@@ -80,3 +80,19 @@ self.Message
 
 
 # TEST HOW CHAIN WORKS
+
+## Patch for kombu package
+Before running this lab, you need to apply the following patch to the kombu package:
+```
+feat(qos)__extend_QoS_class_to_support_FIFO_message_processing_with_GroupedQueue.patch
+```
+
+This patch extends the QoS class in kombu to support FIFO message processing with GroupedQueue. It adds several methods to handle FIFO queues and modifies the behavior of basic_consume and basic_ack.
+
+To apply the patch:
+1. Locate your kombu installation directory (typically in your virtual environment's site-packages)
+2. Apply the patch using the following command:
+   ```bash
+   patch -p1 < feat\(qos\)__extend_QoS_class_to_support_FIFO_message_processing_with_GroupedQueue.patch
+   ```
+3. Ensure that the qos module from this project is available in your Python path

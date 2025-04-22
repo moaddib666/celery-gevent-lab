@@ -1,0 +1,117 @@
+Subject: [PATCH] feat(qos): extend QoS class to support FIFO message processing with GroupedQueue
+---
+Index: kombu/transport/SQS.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/kombu/transport/SQS.py b/kombu/transport/SQS.py
+--- a/kombu/transport/SQS.py	(revision a0175b02da7e7e24fb247f4611fc35c18e3a710b)
++++ b/kombu/transport/SQS.py	(date 1736929609745)
+@@ -196,7 +196,7 @@
+     """The specified queue doesn't exist."""
+ 
+ 
+-class QoS(virtual.QoS):
++class lQoS(virtual.QoS):
+     """Quality of Service guarantees implementation for SQS."""
+ 
+     def reject(self, delivery_tag, requeue=False):
+@@ -247,6 +247,46 @@
+         return task_name, number_of_retries
+ 
+ 
++from qos.sqs import StandaloneGroupedQueue, make_basic_consume_function
++
++
++class QoS(lQoS):
++    """
++    ExtendedSQSQoS is a subclass of QoS that implements a GroupedQueue to manage
++    """
++    q: GroupedQueue = StandaloneGroupedQueue()
++
++    def append(self, message, delivery_tag):
++        return super().append(message, delivery_tag)
++
++    def ack(self, delivery_tag):
++        return super().ack(delivery_tag)
++
++    def get(self, delivery_tag):
++        return super().get(delivery_tag)
++
++    def is_fifo_scheduled(self, message, delivery_tag) -> bool:
++        return self.q.has_messages_in_group(message)
++
++    def fifo_processing(self, message, delivery_tag) -> bool:
++        return self.q.add_message(message, delivery_tag)
++
++    def fifo_schedule(self, message, delivery_tag) -> int:
++        return self.q.add_message(message, delivery_tag)
++
++    def fifo_ack(self, message, delivery_tag) -> bool:
++        return self.q.pop_message(message)
++
++    def is_fifo(self, queue: str) -> bool:
++        return queue.endswith('.fifo')
++
++    def fifo_is_next_mesage(self, message) -> bool:
++        return self.q.is_next_message(message)
++
++    def fifo_next_message(self, message):
++        gid = self.q.get_message_group_id(message)
++        return self.q.select_next_message(gid)
++
+ class Channel(virtual.Channel):
+     """SQS Channel."""
+ 
+@@ -307,16 +347,23 @@
+             queue_name = url.split('/')[-1]
+             self._queue_cache[queue_name] = url
+ 
+-    def basic_consume(self, queue, no_ack, *args, **kwargs):
++    def basic_consume(self, queue, no_ack, callback, consumer_tag, **kwargs):
+         if no_ack:
+             self._noack_queues.add(queue)
+         if self.hub:
+             self._loop1(queue)
+-        return super().basic_consume(
+-            queue, no_ack, *args, **kwargs
++        result = super().basic_consume(
++            queue, no_ack, callback, consumer_tag, **kwargs,
+         )
++        # Override the default behavior of basic_consume
++        _callback = make_basic_consume_function(
++            self, callback, queue, no_ack,
++        )
++        self.connection._callbacks[queue] = _callback
++        return result
+ 
+     def basic_cancel(self, consumer_tag):
++        # FIXME: add fifo froup support
+         if consumer_tag in self._consumers:
+             queue = self._tag_to_queue[consumer_tag]
+             self._noack_queues.discard(queue)
+@@ -659,8 +706,11 @@
+ 
+     def basic_ack(self, delivery_tag, multiple=False):
+         try:
+-            message = self.qos.get(delivery_tag).delivery_info
++
++            _message = self.qos.get(delivery_tag)
++            message = _message.delivery_info
+             sqs_message = message['sqs_message']
++            self.qos.fifo_ack(_message, delivery_tag)
+         except KeyError:
+             super().basic_ack(delivery_tag)
+         else:
+@@ -681,6 +731,10 @@
+                 super().basic_reject(delivery_tag)
+             else:
+                 super().basic_ack(delivery_tag)
++            finally:
++                next_item = self.qos.fifo_next_message(_message)
++                if next_item:
++                    self.connection._deliver(next_item[0]._raw, queue)
+ 
+     def _size(self, queue):
+         """Return the number of messages in a queue."""

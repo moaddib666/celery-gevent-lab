@@ -69,3 +69,14 @@ worker: Warm shutdown (MainProcess)
 [2024-10-15 14:27:32,307: WARNING/MainProcess] 9d33fbac-6d44-472e-905b-dd74cc728abb: Slept 9 seconds
 [2024-10-15 14:27:32,522: INFO/MainProcess] Task tasks.simple_task[9d33fbac-6d44-472e-905b-dd74cc728abb] succeeded in 9.217870448992471s: None
 ```
+
+
+
+
+
+<kombu.transport.SQS.Channel object at 0x10fe3cc90>
+self.Message
+<class 'kombu.transport.virtual.base.Message'>
+
+
+# TEST HOW CHAIN WORKS

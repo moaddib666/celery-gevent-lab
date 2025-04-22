@@ -1,5 +1,5 @@
 # tasks.py
-
+import random
 import time
 
 from celery_config import app
@@ -20,3 +20,20 @@ def simple_task(task, sleep_seconds=1):
     time.sleep(sleep_seconds)
 
     print("{}: Slept {} seconds".format(_id, sleep_seconds))
+
+
+@app.task(bind=True, acks_late=True)
+def fail_task(self, n: int, *args, **kwargs):
+    raise Exception("Task Failed " + str(n))
+
+
+@app.task(bind=True, acks_late=True)
+def success_task(self, n: int, *args, **kwargs):
+    return "Task Succeeded " + str(n)
+
+
+@app.task(bind=True, acks_late=True)
+def debug_task(self, *args, **kwargs):
+    # print('Request: {0!r}'.format(self.request) + 'Args: {0!r}'.format(args) + 'Kwargs: {0!r}'.format(kwargs))
+    print('Args: {0!r}'.format(args) + 'Kwargs: {0!r}'.format(kwargs))
+    time.sleep(random.randint(1, 2))
